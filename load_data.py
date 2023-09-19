@@ -31,7 +31,7 @@ from chromadb.utils import embedding_functions
 import chromadb 
 
 
-# os.environ["OPENAI_API_KEY"] = ""
+os.environ["OPENAI_API_KEY"] = ""
 
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(api_key = os.environ.get("OPENAI_API_KEY"),model_name="text-embedding-ada-002")
 
@@ -81,6 +81,45 @@ def upload_reddit_data(data):
 
     reddit_collection.upsert(ids=ids_batch, documents=texts, metadatas=meta_batch1)
 
+def upload_congress_data(data):
+  db_client = chromadb.PersistentClient(path=persist_directory)
+  congress_collection = db_client.get_or_create_collection("congress", embedding_function=openai_ef)
+  print(db_client.list_collections())
+
+  batch_size = 100  # how many embeddings we create and insert at once
+  # remove none values from dataframe
+  data = data[data['speech2'] != None]
+
+  for i in tqdm(range(0, len(data), batch_size)):
+    # find end of batch
+    i_end = min(len(data), i + batch_size)
+    meta_batch = data[i:i_end]
+
+    # preprocessing.clean_master(meta_batch)
+    meta_batch = meta_batch.fillna(0)
+    # get ids
+    ids_batch = list(map(str, meta_batch.index.to_list()))
+
+    texts = meta_batch["speech2"].to_list()
+   
+
+    meta_batch1 = {
+      'congress': meta_batch['chamber'].to_list(),
+      'committee_name': meta_batch['committee_name'].to_list(),
+      'committee_code': meta_batch['committee_code'].to_list(),
+      'title': meta_batch['title'].to_list(),
+      'govtrack': meta_batch['govtrack'].to_list(),
+      'ranking': meta_batch['ranking'].to_list(),
+      'speaker_last': meta_batch['speaker_last'].to_list(),
+      'speaker_first': meta_batch['speaker_first'].to_list()
+
+    }
+    meta_batch1 = meta_batch.to_dict('records')
+
+    # upsert to CHROMA
+
+    congress_collection.upsert(ids=ids_batch, documents=texts, metadatas=meta_batch1)
+
 def read_reddit_data():
   # Read in Reddit Data
   data = pd.read_csv('C:/Users/arman/Workspace/phd/Arman/autostances/data/gcp_reddit_data.csv')
@@ -96,3 +135,22 @@ def read_reddit_data():
   # replace any nan rows with "None"
   data = data.replace(np.nan, "None")
   return data
+
+def read_congress_data():
+  data = pd.read_csv('C:/Users/arman/Workspace/phd/Arman/autostances/data/hearing_GMO.csv')
+
+  # convert int columns to strings because we need lists of strings
+  data["govtrack"] = data["govtrack"].astype(str)
+  data["congress"] = data["congress"].astype(str)
+  data["ranking"] = data["ranking"].astype(str)
+  # data["text"] = data["speech"] + data["speech2"]
+  # replace any nan rows with "None"
+  data = data.replace(np.nan, "None")
+  return data
+
+
+if __name__ == "__main__":
+  # data = read_reddit_data()
+  # upload_reddit_data(data)
+  data = read_congress_data()
+  upload_congress_data(data)
