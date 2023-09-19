@@ -40,7 +40,7 @@ openai_ef = embedding_functions.OpenAIEmbeddingFunction(api_key = os.environ.get
 persist_directory = 'C:/Users/arman/Workspace/phd/Arman/autostances/data/chroma_database/'
 db_client = chromadb.PersistentClient(path=persist_directory)
 
-llm = ChatOpenAI(model_name='gpt-3.5-turbo-16k', temperature=0.7)
+llm = ChatOpenAI(model_name='gpt-3.5-turbo-16k', temperature=0.5)
 
 langchain.llm_cache = InMemoryCache()
 
@@ -225,14 +225,12 @@ def retrieve_reddit(topic):
   res = openai.Embedding.create(input=[retrieve_relevant_docs],
                                 engine='text-embedding-ada-002')
 
-  # retrieve from Pinecone
+  # retrieve from ChromaDB
   xq = res['data'][0]['embedding']
-  # print(xq)
 
   # get relevant contexts\
   res = reddit_collection.query(query_embeddings=xq,
-                    n_results=25,)
-  print(res)
+                    n_results=125)
   # contexts = [x['metadata']['comment'] for x in res['matches']]
 
   return res
@@ -247,12 +245,12 @@ def retrieve_congress(topic):
   res = openai.Embedding.create(input=[retrieve_relevant_docs],
                                 engine='text-embedding-ada-002')
 
-  # retrieve from Pinecone
+  # retrieve from ChromaDB
   xq = res['data'][0]['embedding']
 
   # get relevant contexts
   res = congress_collection.query(query_embeddings=xq,
-                    n_results=25)
+                    n_results=125)
   # contexts = [x['metadata']['comment'] for x in res['matches']]
 
   return res
@@ -269,12 +267,14 @@ def complete(topic, reddit_context, congress_context):
                                      topic=topic))
   ]).content
 
-topic = 'GMO'
 
 
+if __name__ == "__main__":
+  print("Welcome to the Argument Diagram Generator.\n")
+  topic = input("Enter a topic you wish to analyze: \n")
 
-reddit_context = retrieve_reddit(topic)
-congress_context = retrieve_congress(topic)
 
-# print(query_with_contexts)
-print(complete(topic, reddit_context, congress_context))
+  reddit_context = retrieve_reddit(topic)
+  congress_context = retrieve_congress(topic)
+
+  print(complete(topic, reddit_context, congress_context))
