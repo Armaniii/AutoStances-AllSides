@@ -6,7 +6,7 @@ generating the results.
 Data is supplied internally, please contact Author for access.
 
 1. First run load_data.py to upload data to local vector store.
-2. 
+2. Run main.py to generate output. Ensure preprocessing.py is also stored in the same directory. OpenAI key must be provided.
 
 
 
