@@ -42,10 +42,22 @@ from langchain.document_loaders import CSVLoader
 
 persist_directory = 'C:/Users/arman/Workspace/phd/Arman/autostances/data/chroma_database/'
 
+def delete_reddit():
+  db_client = chromadb.PersistentClient(path=persist_directory)
+  db_client.delete_collection("reddit")
+
+
 def upload_reddit_data(data):
   db_client = chromadb.PersistentClient(path=persist_directory)
-  reddit_collection = db_client.get_or_create_collection("reddit", embedding_function=openai_ef)
+  reddit_collection = db_client.get_or_create_collection("reddit_v2", embedding_function=openai_ef)
   print(db_client.list_collections())
+
+  # check chroma collection embedding function
+
+  # There is an issue here with uploading the documents
+
+  # print(reddit_collection._embedding_function)
+  # print(stop)
 
   batch_size = 100  # how many embeddings we create and insert at once
   # remove none values from dataframe
@@ -150,7 +162,8 @@ def read_congress_data():
 
 
 if __name__ == "__main__":
-  # data = read_reddit_data()
-  # upload_reddit_data(data)
-  data = read_congress_data()
-  upload_congress_data(data)
+  # delete_reddit()
+  data = read_reddit_data()
+  upload_reddit_data(data)
+  # data = read_congress_data()
+  # upload_congress_data(data)

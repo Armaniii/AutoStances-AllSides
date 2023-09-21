@@ -7,7 +7,8 @@ import os
 import langchain
 import openai
 import sys
-from time import sleep
+# from time import sleep, time
+import time
 # from langchain.llms import OpenAI
 from langchain.chat_models import ChatOpenAI
 from langchain.chains import VectorDBQA, RetrievalQA
@@ -31,6 +32,11 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate, StringPromptTemplate
 
+import logging
+
+logging.basicConfig()
+logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
+
 
 os.environ["OPENAI_API_KEY"] = ""
 # openai.api_key = os.environ.get("OPENAI_API_KEY")
@@ -40,7 +46,9 @@ openai_ef = embedding_functions.OpenAIEmbeddingFunction(api_key = os.environ.get
 persist_directory = 'C:/Users/arman/Workspace/phd/Arman/autostances/data/chroma_database/'
 db_client = chromadb.PersistentClient(path=persist_directory)
 
-llm = ChatOpenAI(model_name='gpt-3.5-turbo-16k', temperature=0.5)
+# llm = ChatOpenAI(model_name='gpt-3.5-turbo-16k', temperature=0.5)
+llm = ChatOpenAI(model_name='gpt-4', temperature=0.5)
+
 
 langchain.llm_cache = InMemoryCache()
 
@@ -49,7 +57,9 @@ print("Here are your available collections: ", db_client.list_collections())
 class RedditPromptTemplate(StringPromptTemplate):
 
   def format(self, **kwargs) -> str:
-    context_query = """Use the following two sources of context to complete the task. There are two sources, Reddit and U.S Congressional Hearings. For Reddit context there will be 5 lists, and for Congressional hearings there will be 8 lists. Each position in the list corresponds to metadata for a single post or single speaker. Use both contexts equally. For Reddit use the Comments as the source of context, for Congressional hearings use Speech as the source of context. Retain all metadata information for postprocessing. \n
+    context_query = """Use the following two sources of context equally to complete the following task. There are two sources, Reddit and U.S Congressional Hearings. For Reddit context there will be 5 lists, and for Congressional hearings there will be 8 lists. 
+    Each position in the list corresponds to metadata for a single post or single speaker. Use both contexts equally. For Reddit use the Comments as the source of context, for Congressional hearings use Speech as the source of context. 
+    Retain all metadata information for postprocessing. \n
     
     Authors: {author} \n
     Comments: {comment} \n
@@ -68,7 +78,7 @@ class RedditPromptTemplate(StringPromptTemplate):
   Speech: {speech2}\n\n
 
     
-    Task: Create an argument diagram, with at least two arguments for AND against the topic {topic} using the previous contexts. 
+    Task: Create an argument diagram, with at least three arguments for AND against the topic {topic} using the previous contexts. 
     Here are instructions for completing the task. Follow the structure to create the exact output.\n
 
     # An argument diagram consists of the following steps:
@@ -79,7 +89,8 @@ class RedditPromptTemplate(StringPromptTemplate):
     # - Provide a strong refutation against the counterargument, and in support of the original argument.
     # - If more strong refutations exist against the counterargument, provide them. Repeat this step until no more strong refutations exist.\n
 
-    # - For each entry in the numbered list and for each bullet point, include if the reference came from relevant Reddit comments context provided or Congressional hearings Speech. If the entry came from Reddit, credit the author of the comment and the forum it was posted in. If the entry came from Congressional Hearings credit the congressional title and speaker name. If the knowledge did not come from the context, say so.\n
+    # - For each entry in the numbered list and for each bullet point, include if the reference came from relevant Reddit comments context provided or Congressional hearings Speech. If the entry came from Reddit, credit the author of the comment and the forum it was posted in. Use the following format: If from the Reddit context (author and forum), Congressional Hearing (Title and Speaker name) or general knowledge (General Knowledge).\n
+     If the entry came from Congressional Hearings credit the congressional title and speaker name. If the knowledge did not come from the context, say so.\n
     Extra Instructions:\n
     # - Supplement the argument diagram with general knowledge.\n
     # - After providing the argument diagram, provide a list of topics that are commonly used in arguments made about {topic}, using both of the contexts provided and general knowledge. For each concept or topic cite whether it is from the Reddit context (author and/or forum), Congressional Hearing (Title and Speaker name) or general knowledge.
@@ -87,30 +98,33 @@ class RedditPromptTemplate(StringPromptTemplate):
 
     Complete the task and the output should be as long as necessary:
     """
-
-    doc = kwargs['reddit_context']['metadatas'][0][0]
-    kwargs['author'] = doc.get('author')
-    kwargs['comment'] = doc.get('comment')
+    doc = kwargs['reddit_context']
+    kwargs['author'] = [d.metadata['author'] for i, d in enumerate(doc)]
+    kwargs['comment'] = [d.metadata['comment'] for i, d in enumerate(doc)]
     # kwargs['comment_length'] = doc.get('comment_length')
     # kwargs['id'] = doc.get('id')
     # kwargs['parent_id'] = doc.get('parent_id')
     # kwargs['is_op'] = doc.get('is_op')
-    kwargs['score'] = doc.get('score')
-    kwargs['forum'] = doc.get('forum')
-    kwargs['title'] = doc.get('title')
-    kwargs["topic"] = topic
+    kwargs['score'] = [d.metadata['score'] for i, d in enumerate(doc)]
+    kwargs['forum'] = [d.metadata['forum'] for i, d in enumerate(doc)]
+    kwargs['title'] = [d.metadata['title'] for i, d in enumerate(doc)]
+    kwargs["topic"] = [d.page_content for i, d in enumerate(doc)]
 
-    doc2 = kwargs['congress_context']['metadatas'][0][0]
-    kwargs['congress'] = doc2.get('congress')
-    kwargs['chamber'] = doc2.get('chamber')
-    kwargs['committee_name'] = doc2.get('committee_name')
+
+    # enumerate through docs
+
+    doc2 = kwargs['congress_context']
+    # print(doc2)
+    kwargs['congress'] = [d.metadata['congress'] for i, d in enumerate(doc2)]
+    kwargs['chamber'] = [d.metadata['chamber'] for i, d in enumerate(doc2)]
+    kwargs['committee_name'] = [d.metadata['committee_name'] for i, d in enumerate(doc2)]
     # kwargs['committee_code'] = doc2.get('committee_code')
-    kwargs['title'] = doc2.get('title')
+    kwargs['title'] = [d.metadata['title'] for i, d in enumerate(doc2)]
     # kwargs['govtrack'] = doc2.get('govtrack')
-    kwargs['ranking'] = doc2.get('ranking')
-    kwargs['speaker_first'] = doc2.get('speaker_first')
-    kwargs['speaker_last'] = doc2.get('speaker_last')
-    kwargs['speech2'] = doc2.get('speech2')
+    kwargs['ranking'] =[d.metadata['ranking'] for i, d in enumerate(doc2)]
+    kwargs['speaker_first'] = [d.metadata['speaker_first'] for i, d in enumerate(doc2)]
+    kwargs['speaker_last'] = [d.metadata['speaker_last'] for i, d in enumerate(doc2)]
+    kwargs['speech2'] =  [d.page_content for i, d in enumerate(doc2)]
     # kwargs["topic"] = topic
     return context_query.format(**kwargs)
   
@@ -217,22 +231,79 @@ def multiquery():
 
 def retrieve_reddit(topic):
   try:
-    reddit_collection = db_client.get_collection("reddit")
+    reddit_collection = db_client.get_collection("reddit_v2")
   except:
     print("No collection found")
-  retrieve_relevant_docs = "Retrieve all data that contain information pertaining to " + topic + " or concepts relating to " + topic + "."
+  llm2 = ChatOpenAI(model_name='gpt-4', temperature=0.5)
+  langchain_chroma = Chroma(
+    client=db_client,
+    collection_name=reddit_collection.name,
+    embedding_function=OpenAIEmbeddings(model='text-embedding-ada-002'))
+  
+  # print(reddit_collection.peek())
+  # print(langchain_chroma.metadata)
+  # print(langchain_chroma.similarity_search("GMOs"))
+  # print(langchain_chroma.as_retriever().get_relevant_documents("GMOs"))
+  """
+    'author': meta_batch['author'].to_list(),
+      'comment_length': meta_batch['comment_length'].to_list(),
+      'parent_id': meta_batch['parent_id'].to_list(),
+      'is_op': meta_batch['is_op'].to_list(),
+      'score': meta_batch['score'].to_list(),
+      'forum': meta_batch['forum'].to_list(),
+      'title': meta_batch['title'].to_list(),
+      'date': meta_batch['timestamp'].to_list()
+  """
 
-  res = openai.Embedding.create(input=[retrieve_relevant_docs],
-                                engine='text-embedding-ada-002')
+  metadata_field_info = [
+    AttributeInfo(
+        name="author",
+        description="The author of the comment",
+        type="string",
+    ),
+    AttributeInfo(
+        name="forum",
+        description="The Reddit forum the comment was posted in.",
+        type="string",
+    ),
+    AttributeInfo(
+        name="title",
+        description="The title of the post if there is one.",
+        type="string",
+    ),
+    AttributeInfo(
+        name="date", 
+        description="The date the comment was posted.", 
+        type="string"
+    ),
+  ]
+  document_content_description = "Comments of Reddit posts."
 
-  # retrieve from ChromaDB
-  xq = res['data'][0]['embedding']
 
-  # get relevant contexts\
-  res = reddit_collection.query(query_embeddings=xq,
-                    n_results=125)
+
+  retrieve_relevant_docs = "Retrieve all documents that contain arguments pertaining to " + topic + " or concepts relating to " + topic + "."
+  # retriever_from_llm = MultiQueryRetriever.from_llm(
+  #   retriever=langchain_chroma.as_retriever(), llm=llm2
+  # )
+  
+  retriever = SelfQueryRetriever.from_llm(
+    llm2, langchain_chroma, document_content_description, metadata_field_info, verbose=True
+)
+
+  res = retriever.get_relevant_documents(retrieve_relevant_docs)
+  
+
+  # res = openai.Embedding.create(input=[retrieve_relevant_docs],
+  #                               engine='text-embedding-ada-002')
+
+  # # retrieve from ChromaDB
+  # xq = res['data'][0]['embedding']
+
+  # # get relevant contexts\
+  # res = reddit_collection.query(query_embeddings=xq,
+  #                   n_results=1000)
   # contexts = [x['metadata']['comment'] for x in res['matches']]
-
+  
   return res
 
 
@@ -241,23 +312,39 @@ def retrieve_congress(topic):
     congress_collection = db_client.get_collection("congress")
   except:
     print("No collection found")
-  retrieve_relevant_docs = "Retrieve all data that contain information pertaining to " + topic + " or concepts relating to " + topic + "."
-  res = openai.Embedding.create(input=[retrieve_relevant_docs],
-                                engine='text-embedding-ada-002')
+
+
+
+  langchain_chroma = Chroma(
+    client=db_client,
+    collection_name=congress_collection.name,
+    embedding_function=OpenAIEmbeddings(model='text-embedding-ada-002')).as_retriever(search_type="mmr")
+  
+
+  # print(congress_collection.peek())
+  # print(stop)
+  compressor = LLMChainExtractor.from_llm(llm)
+  compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=langchain_chroma)
+
+  retrieve_relevant_docs = "Retrieve all documents that contain arguments pertaining to " + topic + " or concepts relating to " + topic + "."
+  # res = openai.Embedding.create(input=[retrieve_relevant_docs],
+  #                               engine='text-embedding-ada-002')
+
+  # Contextual Compression
+  compressed_docs = compression_retriever.get_relevant_documents(retrieve_relevant_docs)
 
   # retrieve from ChromaDB
-  xq = res['data'][0]['embedding']
+  # xq = res['data'][0]['embedding']
 
-  # get relevant contexts
-  res = congress_collection.query(query_embeddings=xq,
-                    n_results=125)
+  # # get relevant contexts
+  # res = congress_collection.query(query_embeddings=xq,
+  #                   n_results=1000)
   # contexts = [x['metadata']['comment'] for x in res['matches']]
 
-  return res
+  return compressed_docs
 
 
 def complete(topic, reddit_context, congress_context):
-
   prompt_template = RedditPromptTemplate(
     input_variables=["reddit_context", "congress_context", "topic"])
   return llm([
@@ -273,8 +360,9 @@ if __name__ == "__main__":
   print("Welcome to the Argument Diagram Generator.\n")
   topic = input("Enter a topic you wish to analyze: \n")
 
-
+  start_time = time.time()
   reddit_context = retrieve_reddit(topic)
   congress_context = retrieve_congress(topic)
 
   print(complete(topic, reddit_context, congress_context))
+  print("---Took %s seconds to complete---" % (time.time() - start_time))
