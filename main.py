@@ -282,16 +282,16 @@ def retrieve_reddit(topic):
 
 
   retrieve_relevant_docs = "Retrieve all documents that contain arguments pertaining to " + topic + " or concepts relating to " + topic + "."
-  # retriever_from_llm = MultiQueryRetriever.from_llm(
-  #   retriever=langchain_chroma.as_retriever(), llm=llm2
-  # )
+  retriever_from_llm = MultiQueryRetriever.from_llm(
+    retriever=langchain_chroma.as_retriever(), llm=llm2
+  )
   
-  retriever = SelfQueryRetriever.from_llm(
-    llm2, langchain_chroma, document_content_description, metadata_field_info, verbose=True
-)
+#   retriever = SelfQueryRetriever.from_llm(
+#     llm2, langchain_chroma, document_content_description, metadata_field_info, verbose=True
+# )
 
-  res = retriever.get_relevant_documents(retrieve_relevant_docs)
-  
+  #res = retriever.get_relevant_documents(retrieve_relevant_docs)
+  res = retriever_from_llm.get_relevant_documents(retrieve_relevant_docs)
 
   # res = openai.Embedding.create(input=[retrieve_relevant_docs],
   #                               engine='text-embedding-ada-002')
